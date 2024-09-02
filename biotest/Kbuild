@@ -1,0 +1,2 @@
+obj-m   := biotest.o
+biotest-objs := main.o
