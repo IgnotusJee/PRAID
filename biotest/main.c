@@ -99,7 +99,7 @@ void submit_my_bio(void)
 static int __init my_init(void)
 {
     /* 获取块设备 */
-    bdev = blkdev_get_by_dev(MKDEV(259, 0), FMODE_READ | FMODE_WRITE, NULL);
+    bdev = blkdev_get_by_dev(MKDEV(400, 0), FMODE_READ | FMODE_WRITE, NULL);
     if (IS_ERR(bdev))
     {
         pr_alert("Failed to open block device\n");

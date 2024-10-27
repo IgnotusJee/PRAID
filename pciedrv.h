@@ -3,12 +3,29 @@
 
 #include <linux/pci.h>
 #include <linux/kernel.h>
+#include <linux/workqueue.h>
 
 #define PCIEVIRT_DRV_NAME "GRAID_PCIEDRV"
 
 #define VP_INFO(string, args...) printk(KERN_INFO "%s: " string, PCIEVIRT_DRV_NAME, ##args)
-#define VP_DEBUG(string, args...) printk(KERN_DEBUG "%s: " string, PCIEVIRT_DRV_NAME, ##args)
+#define VP_DEBUG(string, args...) printk(KERN_DEBUG "%s %s: " string, __func__, PCIEVIRT_DRV_NAME, ##args)
 #define VP_ERROR(string, args...) printk(KERN_ERR "%s: " string, PCIEVIRT_DRV_NAME, ##args)
+
+struct verify_work_param {
+    struct page *page_new, *page_old, *page_verify;
+    sector_t num_sector;
+    unsigned int devi;
+    uint64_t offset;
+    uint64_t size;
+    int done_cnt;
+    struct graid_dev *dev;
+};
+
+// work_struct 和 workqueue 函数的参数
+struct verify_work {
+    struct work_struct work;
+    struct verify_work_param param;
+};
 
 static inline bool copy_page_to_buffer(struct page *page, char* buffer, size_t offset, size_t size) {
     char *data;

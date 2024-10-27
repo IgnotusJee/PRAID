@@ -4,7 +4,7 @@
 
 static blk_qc_t vpciedisk_submit_bio(struct bio *bio) {
     struct graid_dev *dev = bio->bi_bdev->bd_disk->private_data;
-    struct bio* child_bio, *tar_bio;
+    struct bio *child_bio, *tar_bio, *ex_bio;
     unsigned int devi;
     sector_t sta_sector, end_sector, cnt_sectors;
 
@@ -30,8 +30,7 @@ bio_split:
 
     child_bio->bi_private = NULL;
     child_bio->bi_end_io = NULL;
-    bio_chain(child_bio, bio);
-
+    
     tar_bio = child_bio;
 
 bio_submit:
@@ -41,10 +40,14 @@ bio_submit:
     bio_set_dev(tar_bio, dev->bdev[devi]);
     
     if(bio_data_dir(tar_bio) == WRITE) {
-        pcievdrv_submit_verify(tar_bio, devi, dev);
+        // pcievdrv_submit_verify(tar_bio, devi, dev);
     }
 
-    // GRAID_INFO("sta_sector=%llu, end_sector=%llu, devi=%u", sta_sector, end_sector, devi);
+    if(tar_bio != bio) {
+        bio_chain(tar_bio, bio);
+    }
+
+    GRAID_INFO("sta_sector=%llu, end_sector=%llu, devi=%u", sta_sector, end_sector, devi);
     submit_bio(tar_bio);
 
     if(tar_bio != bio) {
@@ -97,7 +100,7 @@ static int create_block_device(struct graid_dev *dev) {
 
     nr_sectors = dev->size >> KERNEL_SECTOR_SHIFT;
 
-    spin_lock_init(&dev->blk_lock);
+    // spin_lock_init(&dev->blk_lock);
 
     dev->gd = blk_alloc_disk(NUMA_NO_NODE);
     if(!dev->gd || IS_ERR(dev->gd->queue)) {
@@ -120,7 +123,7 @@ static int create_block_device(struct graid_dev *dev) {
         goto out_disk_init;
     }
 
-    init_waitqueue_head(&graid_dev->verify_wait_queue);
+    // init_waitqueue_head(&graid_dev->verify_wait_queue);
 
     return 0;
 

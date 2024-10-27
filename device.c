@@ -23,7 +23,8 @@ static int pciev_dispatcher(void *data) {
 		// msleep(10);
 		pciev_proc_bars();
 		pciev_dispatcher_clac_xor_single();
-		cond_resched();
+		schedule();
+		// cond_resched();
 	}
 
 	return 0;
@@ -43,6 +44,7 @@ static bool __load_configs(struct pciev_config *config) {
 
 static void PCIEV_DISPATCHER_INIT(struct pciev_dev *pciev_vdev)
 {
+	pciev_vdev->verify_page = alloc_page(GFP_KERNEL);
 	pciev_vdev->pciev_dispatcher = kthread_create(pciev_dispatcher, NULL, "pciev_dispatcher");
 	kthread_bind(pciev_vdev->pciev_dispatcher, pciev_vdev->config.cpu_nr_dispatcher);
 	wake_up_process(pciev_vdev->pciev_dispatcher);
@@ -54,6 +56,7 @@ static void PCIEV_DISPATCHER_FINAL(struct pciev_dev *pciev_vdev)
 		kthread_stop(pciev_vdev->pciev_dispatcher);
 		pciev_vdev->pciev_dispatcher = NULL;
 	}
+	__free_page(pciev_vdev->verify_page);
 }
 
 static void PCIEV_STORAGE_INIT(struct pciev_dev *pciev_vdev) {

@@ -87,7 +87,6 @@ void pciev_proc_bars(void)
 
 static bool pciev_write_verify(char *buffer, sector_t sector_num, size_t offset, size_t size) {
 	struct bio *bio;
-	struct page *page;
 	char *data;
 
 	bio = bio_alloc(GFP_KERNEL, 1);
@@ -96,26 +95,19 @@ static bool pciev_write_verify(char *buffer, sector_t sector_num, size_t offset,
 		goto out;
     }
 
-	page = alloc_page(GFP_KERNEL);
-
-	if(!page) {
-		PCIEV_ERROR("Failed to allocate page\n");
+	data = kmap(pciev_vdev->verify_page);
+	if(!data) {
+		PCIEV_ERROR("Page map error\n");
 		goto out_bio;
 	}
 
-	data = kmap(page);
-	if(!data) {
-		PCIEV_ERROR("Page map error\n");
-		goto out_page;
-	}
-
 	memcpy(data + offset, buffer + offset, size);
-	kunmap(page);
+	kunmap(pciev_vdev->verify_page);
 
 	bio_set_dev(bio, pciev_vdev->verify_blk);
 	bio->bi_iter.bi_sector = sector_num;
 
-	if(bio_add_page(bio, page, size, offset) != size) {
+	if(bio_add_page(bio, pciev_vdev->verify_page, size, offset) != size) {
 		PCIEV_ERROR("Failed to add bio page\n");
 		return false;
 	}
@@ -124,11 +116,8 @@ static bool pciev_write_verify(char *buffer, sector_t sector_num, size_t offset,
 
 	bio_set_op_attrs(bio, REQ_OP_WRITE, 0);
 	submit_bio_wait(bio);
-	__free_page(page);
 
 	return true;
-out_page:
-	__free_page(page);
 out_bio:
 	bio_put(bio);
 out:
@@ -136,13 +125,16 @@ out:
 }
 
 void pciev_dispatcher_clac_xor_single(void) {
-	int offset;
-	uint64_t value, toffset, tsize;
+	uint64_t value, toffset, tsize, nowofs, offset;
 	uint8_t *data, *res;
 
-	if(pciev_vdev->bar->io_property.db != DB_BUSY) {
+	if(pciev_vdev->bar->io_property.io_num <= pciev_vdev->bar->io_property.io_done) {
 		return;
 	}
+
+	PCIEV_DEBUG("4\n");
+
+	pciev_vdev->bar->io_property.io_done ++;
 
 	toffset = pciev_vdev->bar->io_property.offset;
 	tsize = pciev_vdev->bar->io_property.size;
@@ -151,16 +143,18 @@ void pciev_dispatcher_clac_xor_single(void) {
 	res = data + PAGE_SIZE * 2;
 
 	for(offset = 0; offset < tsize; offset += sizeof(uint64_t)) {
-		value = *(uint64_t*)((char*)res + toffset + offset);
-		value ^= *(uint64_t*)((char*)data + toffset + offset);
-		value ^= *(uint64_t*)((char*)data + toffset + offset + PAGE_SIZE);
-		*(uint64_t*)(res + offset) = value;
+		nowofs = toffset + offset;
+		value = U64_DATA(res, nowofs);
+		value ^= U64_DATA(data, nowofs);
+		value ^= U64_DATA(data, nowofs + STRIPE_SIZE);
+		PCIEV_DEBUG("offset=%4lld, %8llu = %8llu xor %8llu xor %8llu\n", nowofs, value, U64_DATA(res, nowofs), U64_DATA(data, nowofs), U64_DATA(data, nowofs + STRIPE_SIZE));
+		U64_DATA(res, nowofs) = value;
 	}
 
-	pciev_write_verify(res, pciev_vdev->bar->io_property.sector_sta, toffset, tsize);
-
-	pciev_vdev->bar->io_property.db = DB_DONE;
-
+	if(!pciev_write_verify(res, pciev_vdev->bar->io_property.sector_sta, toffset, tsize)) {
+		PCIEV_ERROR("Failed to write verify.\n");
+	}
+	
 	pciev_signal_irq(0);
 }
 

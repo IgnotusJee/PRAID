@@ -1,0 +1,2 @@
+obj-m   := readtest.o
+readtest-objs := main.o

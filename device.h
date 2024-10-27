@@ -5,11 +5,12 @@
 #include <linux/msi.h>
 #include <asm/apic.h>
 #include <linux/types.h>
+#include <linux/time.h>
 
 #define PCIEV_DRV_NAME "GRAID_DEVICE"
 
-#ifdef CONFIG_PCIEV_DEBUG
-#define PCIEV_DEBUG(string, args...) printk(KERN_INFO "%s: " string, PCIEV_DRV_NAME, ##args)
+#ifdef CONFIG_GRAID_DEBUG
+#define PCIEV_DEBUG(string, args...) printk(KERN_DEBUG "%s %s: " string, __func__, PCIEV_DRV_NAME, ##args)
 #ifdef CONFIG_PCIEV_DEBUG_VERBOSE
 #define PCIEV_DEBUG_VERBOSE(string, args...) printk(KERN_INFO "%s: " string, PCIEV_DRV_NAME, ##args)
 #else
@@ -73,7 +74,15 @@ struct pciev_dev {
 	struct pciev_bar __iomem *bar;
 
 	struct block_device *verify_blk;
+
+	struct page* verify_page;
 };
+
+struct __packed stripe_info {
+    unsigned long update_ms;
+};
+
+extern struct stripe_info* si_start;
 
 extern struct pciev_dev *pciev_vdev;
 struct pciev_dev *VDEV_INIT(void);

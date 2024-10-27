@@ -7,13 +7,6 @@
 #define PCIEV_SUBSYSTEM_ID 0x370d
 #define PCIEV_SUBSYSTEM_VENDOR_ID PCIEV_VENDOR_ID
 
-enum {
-    DB_FREE = 0,    // device is free and waiting to receive task
-    DB_WRITE = 1,   // device is receving task
-    DB_BUSY = 2,    // device is doing task
-    DB_DONE = 3     // device has task done and wait for writeback
-};
-
 /* pcie 设备的bar资源，保留了物理地址前 1MB 的空间 */
 struct __packed pciev_bar {
     // read only config
@@ -22,13 +15,16 @@ struct __packed pciev_bar {
     struct __packed {
         uint64_t offset, size;
         uint64_t sector_sta;
-        uint8_t db;
+        volatile uint32_t io_num, io_done;
+        // 未进行的 io 操作区间为 (io_done, io_num]
     } io_property;
 
 };
 
-#define PTR_BAR_TO_STRIPE_O(addr) ((char*)(addr))
-#define PTR_BAR_TO_STRIPE_N(addr) ((char*)(addr) + STRIPE_SIZE)
-#define PTR_BAR_TO_STRIPE_V(addr) ((char*)(addr) + STRIPE_SIZE * 2)
+#define PTR_BAR_TO_STRIPE_O(addr) ((uint8_t*)(addr))
+#define PTR_BAR_TO_STRIPE_N(addr) ((uint8_t*)(addr) + STRIPE_SIZE)
+#define PTR_BAR_TO_STRIPE_V(addr) ((uint8_t*)(addr) + STRIPE_SIZE * 2)
+
+#define U64_DATA(ptr, offset) (*(uint64_t*)((uint8_t*)(ptr) + (offset)))
 
 #endif /* _LIB_PCIEV_H */

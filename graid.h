@@ -2,6 +2,7 @@
 #define __GRAID_H__
 
 #include <linux/blkdev.h>
+#include <linux/semaphore.h>
 
 #define GRAID_NAME "graid"
 #define GRAID_ERROR(string, args...) printk(KERN_ERR "%s: " string, GRAID_NAME, ##args)
@@ -35,13 +36,6 @@ struct graid_config {
     unsigned int nvme_minor[32];
 };
 
-struct pciev_bio_private {
-    struct page *page_new, *page_old, *page_verify;
-    uint64_t offset, size;
-    struct graid_dev *dev;
-    int done_cnt;
-};
-
 struct graid_dev {
     struct graid_config config;
 
@@ -52,10 +46,12 @@ struct graid_dev {
     struct block_device *bdev_verify; // 校验盘
 
     // block device
-    spinlock_t blk_lock; // unused
+    // spinlock_t blk_lock; // unused
     struct request_queue *queue;
     struct gendisk *gd;
-    wait_queue_head_t verify_wait_queue; // 用于等待上一个校验任务结束的等待队列
+    struct semaphore sem;
+    struct workqueue_struct *workqueue;
+    // wait_queue_head_t verify_wait_queue; // 用于等待上一个校验任务结束的等待队列
 
     // pcie device
     resource_size_t mem_sta;
@@ -63,8 +59,11 @@ struct graid_dev {
     struct pciev_bar __iomem *bar; // struct pciev_bar 存放的地址
     void __iomem *stripe_addr; // 三个stripe计算区域的的起始地址
     int irq;
-    struct pciev_bio_private *data_private; // 校验执行的私有数据
-    // spinlock_t pciev_lock;
+};
+
+enum {
+    STATUS_FREE = 0,    // device is free and waiting to receive task
+    STATUS_WRITE = 1,   // device is receving task
 };
 
 extern struct graid_dev* graid_dev;
