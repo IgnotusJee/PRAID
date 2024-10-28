@@ -26,9 +26,9 @@
 
 struct graid_dev *graid_dev = NULL;
 
-unsigned long memmap_start = 0;
-unsigned long memmap_size = 0;
-unsigned int cpu = 0;
+static unsigned long memmap_start = 0;
+static unsigned long memmap_size = 0;
+static unsigned int cpu = 0;
 
 static unsigned int major = 0;
 static uint64_t per_size = 0;
@@ -134,28 +134,34 @@ static bool __load_configs(struct graid_config *config) {
     config->nvme_major = major;
     config->size_nvme_disk = per_size;
 
-	config->nr_nvme_disks = 0;
+	config->nr_data_disks = 0;
 
 	while ((minor = strsep(&minors, ",")) != NULL) {
 		minor_nr = (unsigned int)simple_strtol(minor, NULL, 10);
 		if (first) {
 			config->nvme_minor_verify = minor_nr;
+			first = false;
 		} else {
-			config->nvme_minor[config->nr_nvme_disks] = minor_nr;
-			config->nr_nvme_disks++;
+			config->nvme_minor[config->nr_data_disks] = minor_nr;
+			config->nr_data_disks ++;
 		}
-		first = false;
 
-		if(config->nr_nvme_disks > 31) {
+		if(config->nr_data_disks > 31) {
 			GRAID_ERROR("To many disks.\n");
 			return false;
 		}
 	}
 
-	if((unsigned long)(config->nr_nvme_disks + 1) * STRIPE_SIZE + PAGE_SIZE > memmap_size) {
+	if((unsigned long)(((config->nr_data_disks * config->size_nvme_disk) >> (CHUNK_SHIFT - 2)) + STORAGE_OFFSET) > memmap_size) {
 		GRAID_ERROR("Spcace proviced too small.\n");
 		return false;
 	}
+
+	config->memmap_start = memmap_start;
+	config->memmap_size = memmap_size;
+	config->storage_start = memmap_start + STORAGE_OFFSET;
+	config->storage_size = memmap_size - STORAGE_OFFSET;
+	config->cpu_nr_dispatcher = cpu;
 
 	return true;
 }
@@ -163,7 +169,9 @@ static bool __load_configs(struct graid_config *config) {
 static int nvme_blkdev_init(struct graid_dev *dev) {
     int i;
 
-    dev->disk_cnt = dev->config.nr_nvme_disks;
+    dev->disk_cnt = dev->config.nr_data_disks;
+    dev->size = dev->config.size_nvme_disk * (uint64_t)dev->disk_cnt;
+	dev->nr_stripe = dev->size >> CHUNK_SHIFT;
     
     for(i = 0; i < dev->disk_cnt; i ++) {
         if(IS_ERR((dev->bdev[i] = blkdev_get_by_dev(
@@ -227,7 +235,7 @@ static int vpcie_module_init(void) {
 		goto out_pcievdrv_err;
 	}
 
-	if(PCIEV_init(graid_dev->bdev_verify, graid_dev->disk_cnt) < 0) {
+	if(PCIEV_init(graid_dev) < 0) {
 		ret = -EBUSY;
 		goto out_nvme_err;
 	}

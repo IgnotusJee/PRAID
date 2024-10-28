@@ -10,7 +10,7 @@
 #define PCIEV_DRV_NAME "GRAID_DEVICE"
 
 #ifdef CONFIG_GRAID_DEBUG
-#define PCIEV_DEBUG(string, args...) printk(KERN_DEBUG "%s %s: " string, __func__, PCIEV_DRV_NAME, ##args)
+#define PCIEV_DEBUG(string, args...) printk(KERN_DEBUG "%s %s: " string, PCIEV_DRV_NAME, __func__, ##args)
 #ifdef CONFIG_PCIEV_DEBUG_VERBOSE
 #define PCIEV_DEBUG_VERBOSE(string, args...) printk(KERN_INFO "%s: " string, PCIEV_DRV_NAME, ##args)
 #else
@@ -38,16 +38,12 @@
 #define BYTE_TO_MB(b) ((b) >> 20)
 #define BYTE_TO_GB(b) ((b) >> 30)
 
-struct pciev_config {
-	unsigned long memmap_start; // byte
-	unsigned long memmap_size; // byte
+// 200s 未更改的数据就标记为冷数据
+#define DOORMAT_TIME_SEC 3
 
-	unsigned long storage_start; //byte
-	unsigned long storage_size; // byte
-
-	unsigned int cnt_disk;
-
-	unsigned int cpu_nr_dispatcher;
+// include latest update time in secends, 0 for no dirty data
+struct __packed chunk_info {
+    time64_t update_sec;
 };
 
 struct pciev_dev {
@@ -61,7 +57,6 @@ struct pciev_dev {
 
 	struct pci_dev *pdev;
 
-	struct pciev_config config;
 	struct task_struct *pciev_dispatcher;
 
 	void *storage_mapped;
@@ -72,30 +67,21 @@ struct pciev_dev {
 
 	struct pciev_bar *old_bar;
 	struct pciev_bar __iomem *bar;
+	struct chunk_info __iomem *si_start;
 
-	struct block_device *verify_blk;
-
-	struct page* verify_page;
+	void* buffer;
+	struct graid_dev *gdev;
 };
 
-struct __packed stripe_info {
-    unsigned long update_ms;
-};
-
-extern struct stripe_info* si_start;
 
 extern struct pciev_dev *pciev_vdev;
 struct pciev_dev *VDEV_INIT(void);
 void VDEV_FINALIZE(struct pciev_dev *pciev_vdev);
 void pciev_proc_bars(void);
-void pciev_dispatcher_clac_xor_single(void);
+void pciev_storage_dispatch(void);
 bool PCIEV_PCI_INIT(struct pciev_dev *dev);
 
-extern unsigned long memmap_start;
-extern unsigned long memmap_size;
-extern unsigned int cpu;
-
-int PCIEV_init(struct block_device*, unsigned int cnt_dev);
+int PCIEV_init(struct graid_dev* gdev);
 void PCIEV_exit(void);
 
 #endif /* _LIB_DEVICE_H */

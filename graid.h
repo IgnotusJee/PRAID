@@ -12,11 +12,11 @@
 #define HARDSECT_SIZE 512
 #define KERNEL_SECTOR_SHIFT 9
 
-#define STRIPE_SHIFT 12
-#define STRIPE_SIZE (1 << STRIPE_SHIFT)
+#define CHUNK_SHIFT 12
+#define CHUNK_SIZE (1 << CHUNK_SHIFT)
 
-#define SECTORS_IN_STRIPE 8
-#define SECTORS_IN_STRIPE_SHIFT 3
+#define SECTORS_IN_CHUNK 8
+#define SECTORS_IN_CHUNK_SHIFT 3
 
 #define KB(k) ((k) << 10)
 #define MB(m) ((m) << 20)
@@ -26,14 +26,23 @@
 #define BYTE_TO_MB(b) ((b) >> 20)
 #define BYTE_TO_GB(b) ((b) >> 30)
 
-#define BAR_STRIPE_OFFSET MB(1)
+#define STORAGE_OFFSET MB(256) // also bar size
+#define BAR_SIZE STORAGE_OFFSET
 
 struct graid_config {
-    unsigned int nr_nvme_disks;
+    unsigned int nr_data_disks;
     uint64_t size_nvme_disk;
     unsigned int nvme_major;
     unsigned int nvme_minor_verify;
     unsigned int nvme_minor[32];
+
+    unsigned long memmap_start; // byte
+	unsigned long memmap_size; // byte
+
+	unsigned long storage_start; //byte
+	unsigned long storage_size; // byte
+
+	unsigned int cpu_nr_dispatcher;
 };
 
 struct graid_dev {
@@ -49,16 +58,14 @@ struct graid_dev {
     // spinlock_t blk_lock; // unused
     struct request_queue *queue;
     struct gendisk *gd;
-    struct semaphore sem;
-    struct workqueue_struct *workqueue;
     // wait_queue_head_t verify_wait_queue; // 用于等待上一个校验任务结束的等待队列
 
     // pcie device
     resource_size_t mem_sta;
     size_t range;
     struct pciev_bar __iomem *bar; // struct pciev_bar 存放的地址
-    void __iomem *stripe_addr; // 三个stripe计算区域的的起始地址
     int irq;
+    size_t nr_stripe;
 };
 
 enum {

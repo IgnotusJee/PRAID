@@ -16,37 +16,22 @@ struct pciev_dev *pciev_vdev = NULL;
 
 static int pciev_dispatcher(void *data) {
 	PCIEV_INFO("pciev_dispatcher started on cpu %d (node %d)\n",
-			   pciev_vdev->config.cpu_nr_dispatcher,
-			   cpu_to_node(pciev_vdev->config.cpu_nr_dispatcher));
+			   pciev_vdev->gdev->config.cpu_nr_dispatcher,
+			   cpu_to_node(pciev_vdev->gdev->config.cpu_nr_dispatcher));
 	
 	while (!kthread_should_stop()) {
-		// msleep(10);
 		pciev_proc_bars();
-		pciev_dispatcher_clac_xor_single();
-		schedule();
-		// cond_resched();
+		pciev_storage_dispatch();
+		cond_resched();
 	}
 
 	return 0;
 }
 
-static bool __load_configs(struct pciev_config *config) {
-	config->memmap_start = memmap_start;
-	config->memmap_size = memmap_size;
-
-	config->storage_start = memmap_start + BAR_STRIPE_OFFSET;
-	config->storage_size = memmap_size - BAR_STRIPE_OFFSET;
-
-	config->cpu_nr_dispatcher = cpu;
-
-	return true;
-}
-
 static void PCIEV_DISPATCHER_INIT(struct pciev_dev *pciev_vdev)
 {
-	pciev_vdev->verify_page = alloc_page(GFP_KERNEL);
 	pciev_vdev->pciev_dispatcher = kthread_create(pciev_dispatcher, NULL, "pciev_dispatcher");
-	kthread_bind(pciev_vdev->pciev_dispatcher, pciev_vdev->config.cpu_nr_dispatcher);
+	kthread_bind(pciev_vdev->pciev_dispatcher, pciev_vdev->gdev->config.cpu_nr_dispatcher);
 	wake_up_process(pciev_vdev->pciev_dispatcher);
 }
 
@@ -56,38 +41,39 @@ static void PCIEV_DISPATCHER_FINAL(struct pciev_dev *pciev_vdev)
 		kthread_stop(pciev_vdev->pciev_dispatcher);
 		pciev_vdev->pciev_dispatcher = NULL;
 	}
-	__free_page(pciev_vdev->verify_page);
 }
 
 static void PCIEV_STORAGE_INIT(struct pciev_dev *pciev_vdev) {
 	PCIEV_INFO("Storage: %#010lx-%#010lx (%lu MiB)\n",
-			   pciev_vdev->config.storage_start,
-			   pciev_vdev->config.storage_start + pciev_vdev->config.storage_size,
-			   BYTE_TO_MB(pciev_vdev->config.storage_size));
+			   pciev_vdev->gdev->config.storage_start,
+			   pciev_vdev->gdev->config.storage_start + pciev_vdev->gdev->config.storage_size,
+			   BYTE_TO_MB(pciev_vdev->gdev->config.storage_size));
 
-	pciev_vdev->storage_mapped = memremap(pciev_vdev->config.storage_start,
-										  pciev_vdev->config.storage_size, MEMREMAP_WB);
+	pciev_vdev->storage_mapped = memremap(pciev_vdev->gdev->config.storage_start,
+										  pciev_vdev->gdev->config.storage_size, MEMREMAP_WB);
 
 	if (pciev_vdev->storage_mapped == NULL)
 		PCIEV_ERROR("Failed to map storage memory.\n");
+
+	pciev_vdev->si_start = pciev_vdev->storage_mapped;
+	memset(pciev_vdev->si_start, 0, sizeof(struct chunk_info) * (pciev_vdev->gdev->size >> CHUNK_SHIFT));
+
+	pciev_vdev->buffer = kzalloc(CHUNK_SIZE*2, GFP_KERNEL);
 }
 
 static void PCIEV_STORAGE_FINAL(struct pciev_dev *pciev_vdev) {
 	if (pciev_vdev->storage_mapped)
 		memunmap(pciev_vdev->storage_mapped);
+	if(pciev_vdev->buffer)
+		kfree(pciev_vdev->buffer);
 }
 
-int PCIEV_init(struct block_device* bdev, unsigned int cnt_dev) {
+int PCIEV_init(struct graid_dev* gdev) {
 	pciev_vdev = VDEV_INIT();
 	if (!pciev_vdev)
 		return -EINVAL;
 
-	if (!__load_configs(&pciev_vdev->config)) {
-		goto ret_err;
-	}
-
-	pciev_vdev->verify_blk = bdev;
-	pciev_vdev->config.cnt_disk = cnt_dev;
+	pciev_vdev->gdev = gdev;
 
 	PCIEV_STORAGE_INIT(pciev_vdev);
 

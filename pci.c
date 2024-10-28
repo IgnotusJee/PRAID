@@ -11,6 +11,8 @@
 #include "pciev.h"
 #include "graid.h"
 
+struct chunk_info* si_start;
+
 static void __signal_irq(const char *type, unsigned int irq)
 {
 	struct irq_data *data = irq_get_irq_data(irq);
@@ -75,9 +77,8 @@ void pciev_proc_bars(void)
 	volatile struct pciev_bar *old_bar = pciev_vdev->old_bar;
 	volatile struct pciev_bar *bar = pciev_vdev->bar;
 
-	if (old_bar->dev_cnt != bar->dev_cnt) {
-		// memcpy(&old_bar->dev_cnt, &bar->dev_cnt, sizeof(old_bar->dev_cnt));
-		bar->dev_cnt = old_bar->dev_cnt; // read only
+	if (old_bar->io_bitmap.offset != bar->io_bitmap.offset) {
+		bar->io_bitmap.offset = old_bar->io_bitmap.offset; // read only
 	}
 
 // out:
@@ -85,107 +86,149 @@ void pciev_proc_bars(void)
 	return;
 }
 
-static bool pciev_write_verify(char *buffer, sector_t sector_num, size_t offset, size_t size) {
+static enum pciev_io_t {
+	PCIEV_BIO_READ = 0,
+	PCIEV_BIO_WRITE = 1,
+};
+
+static int pciev_submit_bio(void* buffer, size_t offset, size_t size, sector_t sector_num, struct block_device* blk_dev, enum pciev_io_t rw) {
 	struct bio *bio;
-	char *data;
+	void *page_data;
+	struct page* page;
+	int ret = 0;
 
 	bio = bio_alloc(GFP_KERNEL, 1);
     if(!bio) {
 		PCIEV_ERROR("Failed to allocate bio\n");
+		ret = -EINVAL;
 		goto out;
     }
 
-	data = kmap(pciev_vdev->verify_page);
-	if(!data) {
-		PCIEV_ERROR("Page map error\n");
+	page = alloc_page(GFP_KERNEL);
+	if(!page) {
+		PCIEV_ERROR("Failed to allocate page\n");
+		ret = -EINVAL;
 		goto out_bio;
 	}
 
-	memcpy(data + offset, buffer + offset, size);
-	kunmap(pciev_vdev->verify_page);
+	page_data = kmap(page);
+	if(!page_data) {
+		PCIEV_ERROR("Page map error\n");
+		ret = -EINVAL;
+		goto out_page;
+	}
 
-	bio_set_dev(bio, pciev_vdev->verify_blk);
+	if(rw == PCIEV_BIO_WRITE) {
+		memcpy((uint8_t*)page_data + offset, (uint8_t*)buffer + offset, size);
+	}
+
+	bio_set_dev(bio, blk_dev);
 	bio->bi_iter.bi_sector = sector_num;
 
-	if(bio_add_page(bio, pciev_vdev->verify_page, size, offset) != size) {
+	if(bio_add_page(bio, page, size, offset) != size) {
 		PCIEV_ERROR("Failed to add bio page\n");
-		return false;
+		ret = -EIO;
+		goto out_map;
 	}
 
 	PCIEV_INFO("sta_sector=%llu, size=%lu, offset=%lu", sector_num, size, offset);
 
-	bio_set_op_attrs(bio, REQ_OP_WRITE, 0);
-	submit_bio_wait(bio);
+	bio_set_op_attrs(bio, rw ? REQ_OP_WRITE : REQ_OP_READ, 0);
+	if(submit_bio_wait(bio) < 0) {
+		PCIEV_ERROR("Failed to submit bio\n");
+		ret = -EIO;
+		goto out_map;
+	}
 
-	return true;
+	if(rw == PCIEV_BIO_READ) {
+		memcpy((uint8_t*)buffer + offset, (uint8_t*)page_data + offset, size);
+	}
+
+out_map:
+	kunmap(page);
+out_page:
+	__free_page(page);
 out_bio:
 	bio_put(bio);
 out:
-	return false;
+	return ret;
 }
 
-void pciev_dispatcher_clac_xor_single(void) {
-	uint64_t value, toffset, tsize, nowofs, offset;
-	uint8_t *data, *res;
+int pciev_do_stripe_verify(size_t stripe_num, void* buffer) {
+	void *buf, *res;
+	int i, ret = 0, offset;
+	sector_t sector_num = stripe_num << SECTORS_IN_CHUNK_SHIFT;
+	uint64_t val;
 
-	if(pciev_vdev->bar->io_property.io_num <= pciev_vdev->bar->io_property.io_done) {
-		return;
+	buf = buffer;
+	res = (uint8_t*)buf + CHUNK_SIZE;
+
+	memset(res, 0, CHUNK_SIZE);
+
+	for(i = 0; i < pciev_vdev->gdev->disk_cnt; i ++) {
+		ret = pciev_submit_bio(buf, 0, CHUNK_SIZE, sector_num, pciev_vdev->gdev->bdev[i], PCIEV_BIO_READ);
+		if(ret < 0) {
+			PCIEV_ERROR("Read disk %d failed.\n", i);
+			return ret;
+		}
+
+		for(offset = 0; offset < CHUNK_SIZE; offset += sizeof(uint64_t)) {
+			val = U64_DATA(res, offset);
+			val ^= U64_DATA(buf, offset);
+			U64_DATA(res, offset) = val;
+		}
 	}
 
-	PCIEV_DEBUG("4\n");
-
-	pciev_vdev->bar->io_property.io_done ++;
-
-	toffset = pciev_vdev->bar->io_property.offset;
-	tsize = pciev_vdev->bar->io_property.size;
-
-	data = pciev_vdev->storage_mapped;
-	res = data + PAGE_SIZE * 2;
-
-	for(offset = 0; offset < tsize; offset += sizeof(uint64_t)) {
-		nowofs = toffset + offset;
-		value = U64_DATA(res, nowofs);
-		value ^= U64_DATA(data, nowofs);
-		value ^= U64_DATA(data, nowofs + STRIPE_SIZE);
-		PCIEV_DEBUG("offset=%4lld, %8llu = %8llu xor %8llu xor %8llu\n", nowofs, value, U64_DATA(res, nowofs), U64_DATA(data, nowofs), U64_DATA(data, nowofs + STRIPE_SIZE));
-		U64_DATA(res, nowofs) = value;
+	ret = pciev_submit_bio(res, 0, CHUNK_SIZE, sector_num, pciev_vdev->gdev->bdev_verify, PCIEV_BIO_WRITE);
+	if(ret < 0) {
+		PCIEV_ERROR("Read verify failed.\n");
+		return ret;
 	}
 
-	if(!pciev_write_verify(res, pciev_vdev->bar->io_property.sector_sta, toffset, tsize)) {
-		PCIEV_ERROR("Failed to write verify.\n");
-	}
-	
-	pciev_signal_irq(0);
+	return ret;
 }
 
-// void pciev_disptcher_calc_xor_whole(void) {
-// 	int offset, idev;
-// 	uint64_t value;
-// 	uint8_t *data, *res;
+void pciev_storage_dispatch(void) {
+	struct timespec64 ts;
+	time64_t now_sec;
+	size_t pos, nr_chunk = pciev_vdev->gdev->nr_stripe * pciev_vdev->gdev->disk_cnt;
+	int i;
+	bool flag;
 
-// 	// no job, return and wait
-// 	if(pciev_vdev->bar->io_property.db != DB_FREE) {
-// 		return;
-// 	}
+	ktime_get_boottime_ts64(&ts);
+	now_sec = (time64_t)ts.tv_sec;
+	// PCIEV_DEBUG("Dispatching in %lld.\n", now_sec);
 
-// 	pciev_vdev->bar->io_property.db = DB_BUSY;
+	// refresh update time
+	for(pos = 0; pos < nr_chunk; pos ++) {
+		ktime_get_boottime_ts64(&ts);
+		if(BIT_TEST(PCIEV_BITMAP_START(pciev_vdev->bar), pos)) {
+			BIT_SET(PCIEV_BITMAP_START(pciev_vdev->bar), pos);
+			pciev_vdev->si_start[pos].update_sec = (time64_t)ts.tv_sec;
+			PCIEV_DEBUG("received bit at %lu in %lld from %lld.\n", pos, ts.tv_sec, now_sec);
+		}
+	}
 
-// 	// has job, now 0 to dev_cnt-1 stripes filled with data
-// 	// clac res to dec_cnt
-
-// 	data = pciev_vdev->storage_mapped;
-// 	res = data + PAGE_SIZE * pciev_vdev->config.cnt_disk;
-
-// 	for(offset = 0; offset < PAGE_SIZE; offset += sizeof(uint64_t)) {
-// 		value = 0;
-// 		for(idev = 0; idev < pciev_vdev->config.cnt_disk; idev ++) {
-// 			value ^= *(uint64_t*)(data + PAGE_SIZE * idev + offset);
-// 		}
-// 		*(uint64_t*)(res + offset) = value;
-// 	}
-
-// 	pciev_vdev->bar->io_property.db = DB_DONE;
-// }
+	for(pos = 0; pos < nr_chunk; pos += pciev_vdev->gdev->disk_cnt) {
+		flag = false;
+		for(i = 0; i < pciev_vdev->gdev->disk_cnt; i++) {
+			if(pciev_vdev->si_start[pos + i].update_sec > 0) {
+				// PCIEV_DEBUG("modify detected at %lu %d in %lld from %lld.\n", pos, i, pciev_vdev->si_start[pos + i].update_sec, now_sec);
+			}
+			if(pciev_vdev->si_start[pos + i].update_sec > 0 && pciev_vdev->si_start[pos + i].update_sec < now_sec - DOORMAT_TIME_SEC) {
+				flag = true;
+				break;
+			}
+		}
+		if(flag) {
+			PCIEV_DEBUG("Doing verify in stripe %lu\n", pos / pciev_vdev->gdev->disk_cnt);
+			pciev_do_stripe_verify(pos / pciev_vdev->gdev->disk_cnt, pciev_vdev->buffer);
+			for(i = 0; i < pciev_vdev->gdev->disk_cnt; i++) {
+				pciev_vdev->si_start[pos + i].update_sec = 0;
+			}
+		}
+	}
+}
 
 static int pciev_pci_read(struct pci_bus *bus, unsigned int devfn, int where, int size, u32 *val)
 {
@@ -286,31 +329,17 @@ static void __dump_pci_dev(struct pci_dev *dev)
 static void __init_pciev_bar(struct pci_dev *dev)
 {
 	struct pciev_bar *bar =
-		memremap(pci_resource_start(dev, 0), PAGE_SIZE, MEMREMAP_WT);
+		memremap(pci_resource_start(dev, 0), BAR_SIZE, MEMREMAP_WT);
 	BUG_ON(!bar);
 
 	PCIEV_INFO("remap bar address: %p", bar);
 
 	pciev_vdev->bar = bar;
-	memset(bar, 0x0, PAGE_SIZE);
+	memset(bar, 0x0, BAR_SIZE);
 
-	bar->dev_cnt = pciev_vdev->config.cnt_disk;
+	bar->io_bitmap.offset = sizeof(struct pciev_bar);
 
 	// PCIEV_INFO("in bar data: 0x%llx 0x%llx.\n", bar->io_cnt, bar->storage_start, bar->storage_size);
-
-	// pciev_vdev->dbs = ((void *)bar) + PAGE_SIZE;
-
-	// *bar = (struct pciev_bar) {
-	// 	.cap = {
-	// 		.to = 1,
-	// 		.mpsmin = 0,
-	// 		.mqes = 1024 - 1, // 0-based value
-	// 	},
-	// 	.vs = {
-	// 		.mjr = 1,
-	// 		.mnr = 0,
-	// 	},
-	// };
 }
 
 static struct pci_bus *__create_pci_bus(void)
@@ -533,7 +562,7 @@ static void PCI_EXTCAP_SETTINGS(struct pci_ext_cap *ext_cap)
 
 bool PCIEV_PCI_INIT(struct pciev_dev *pciev_vdev)
 {
-	PCI_HEADER_SETTINGS(pciev_vdev->pcihdr, pciev_vdev->config.memmap_start);
+	PCI_HEADER_SETTINGS(pciev_vdev->pcihdr, pciev_vdev->gdev->config.memmap_start);
 	PCI_PMCAP_SETTINGS(pciev_vdev->pmcap);
 	PCI_MSIXCAP_SETTINGS(pciev_vdev->msixcap);
 	PCI_PCIECAP_SETTINGS(pciev_vdev->pciecap);

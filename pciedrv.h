@@ -8,7 +8,7 @@
 #define PCIEVIRT_DRV_NAME "GRAID_PCIEDRV"
 
 #define VP_INFO(string, args...) printk(KERN_INFO "%s: " string, PCIEVIRT_DRV_NAME, ##args)
-#define VP_DEBUG(string, args...) printk(KERN_DEBUG "%s %s: " string, __func__, PCIEVIRT_DRV_NAME, ##args)
+#define VP_DEBUG(string, args...) printk(KERN_DEBUG "%s %s: " string, PCIEVIRT_DRV_NAME, __func__, ##args)
 #define VP_ERROR(string, args...) printk(KERN_ERR "%s: " string, PCIEVIRT_DRV_NAME, ##args)
 
 struct verify_work_param {

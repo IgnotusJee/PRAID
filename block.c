@@ -11,7 +11,7 @@ static blk_qc_t vpciedisk_submit_bio(struct bio *bio) {
 bio_split:
 
     sta_sector = bio->bi_iter.bi_sector;
-    end_sector = stripe_end_sector(sta_sector);
+    end_sector = chunk_end_sector(sta_sector);
 
     if(end_sector + 1 >= bio_end_sector(bio)) {
         end_sector = bio_end_sector(bio) - 1;
@@ -34,13 +34,13 @@ bio_split:
     tar_bio = child_bio;
 
 bio_submit:
-    devi = device_num(stripe_num(sta_sector), dev->disk_cnt);
+    devi = device_num(chunk_num(sta_sector), dev->disk_cnt);
 
     tar_bio->bi_iter.bi_sector = sector_whole_to_i(sta_sector, dev->disk_cnt);
     bio_set_dev(tar_bio, dev->bdev[devi]);
     
     if(bio_data_dir(tar_bio) == WRITE) {
-        // pcievdrv_submit_verify(tar_bio, devi, dev);
+        pcievdrv_set_wf(chunk_num(sta_sector), dev);
     }
 
     if(tar_bio != bio) {
@@ -95,8 +95,6 @@ struct block_device_operations vpciedisk_dev_ops = {
 static int create_block_device(struct graid_dev *dev) {
     int err;
     uint64_t nr_sectors;
-
-    dev->size = dev->config.size_nvme_disk * (uint64_t)dev->disk_cnt;
 
     nr_sectors = dev->size >> KERNEL_SECTOR_SHIFT;
 
