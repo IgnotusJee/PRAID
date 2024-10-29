@@ -8,16 +8,14 @@
 #define PCIEVIRT_DRV_NAME "GRAID_PCIEDRV"
 
 #define VP_INFO(string, args...) printk(KERN_INFO "%s: " string, PCIEVIRT_DRV_NAME, ##args)
-#define VP_DEBUG(string, args...) printk(KERN_DEBUG "%s %s: " string, __func__, PCIEVIRT_DRV_NAME, ##args)
+#define VP_DEBUG(string, args...) printk(KERN_DEBUG "%s %s: " string, PCIEVIRT_DRV_NAME, __func__, ##args)
 #define VP_ERROR(string, args...) printk(KERN_ERR "%s: " string, PCIEVIRT_DRV_NAME, ##args)
 
 struct verify_work_param {
-    struct page *page_new, *page_old, *page_verify;
+    struct page *page_new, *page_old;
     sector_t num_sector;
-    unsigned int devi;
     uint64_t offset;
     uint64_t size;
-    int done_cnt;
     struct graid_dev *dev;
 };
 

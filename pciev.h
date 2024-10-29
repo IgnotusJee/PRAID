@@ -13,17 +13,17 @@ struct __packed pciev_bar {
     uint32_t dev_cnt;
 
     struct __packed {
-        uint64_t offset, size;
-        uint64_t sector_sta;
+        volatile uint64_t offset, size;
+        volatile uint64_t sector_sta;
         volatile uint32_t io_num, io_done;
         // 未进行的 io 操作区间为 (io_done, io_num]
     } io_property;
 
 };
 
-#define PTR_BAR_TO_STRIPE_O(addr) ((uint8_t*)(addr))
-#define PTR_BAR_TO_STRIPE_N(addr) ((uint8_t*)(addr) + STRIPE_SIZE)
-#define PTR_BAR_TO_STRIPE_V(addr) ((uint8_t*)(addr) + STRIPE_SIZE * 2)
+#define PTR_BAR_TO_CHUNK_O(addr) ((uint8_t*)(addr))
+#define PTR_BAR_TO_CHUNK_N(addr) ((uint8_t*)(addr) + CHUNK_SIZE)
+#define PTR_BAR_TO_CHUNK_V(addr) ((uint8_t*)(addr) + CHUNK_SIZE * 2)
 
 #define U64_DATA(ptr, offset) (*(uint64_t*)((uint8_t*)(ptr) + (offset)))
 

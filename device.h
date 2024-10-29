@@ -78,12 +78,6 @@ struct pciev_dev {
 	struct page* verify_page;
 };
 
-struct __packed stripe_info {
-    unsigned long update_ms;
-};
-
-extern struct stripe_info* si_start;
-
 extern struct pciev_dev *pciev_vdev;
 struct pciev_dev *VDEV_INIT(void);
 void VDEV_FINALIZE(struct pciev_dev *pciev_vdev);

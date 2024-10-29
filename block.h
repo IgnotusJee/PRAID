@@ -14,14 +14,14 @@
 
 #define SECTOR_TO_BYTE(sector) ((sector) << KERNEL_SECTOR_SHIFT)
 
-#define stripe_num(sector_num) ((sector_num) >> SECTORS_IN_STRIPE_SHIFT)
-#define stripe_group_num(sector_num, cnt_dev) (stripe_num(sector_num) / cnt_dev)
-#define device_num(stripe, cnt_dev) ((stripe) % (cnt_dev))
-#define stripe_sta_sector(sector_num) (stripe_num(sector_num) << SECTORS_IN_STRIPE_SHIFT)
-#define stripe_end_sector(sector_num) (stripe_sta_sector(sector_num) + SECTORS_IN_STRIPE - 1)
-#define sector_whole_to_i(sector_sta, cnt_dev) (((sector_sta) & 0x7) + ((stripe_num(sector_sta) / (cnt_dev)) << SECTORS_IN_STRIPE_SHIFT))
-#define i_stripe_sta_sector(sector_num, cnt_dev) sector_whole_to_i(stripe_sta_sector(sector_num), cnt_dev)
-#define i_stripe_end_sector(sector_num, cnt_dev) sector_whole_to_i(stripe_end_sector(sector_num), cnt_dev)
+#define chunk_num(sector_num) ((sector_num) >> SECTORS_IN_CHUNK_SHIFT)
+#define stripe_num(sector_num, cnt_dev) (chunk_num(sector_num) / cnt_dev)
+#define device_num(chunk, cnt_dev) ((chunk) % (cnt_dev))
+#define chunk_sta_sector(sector_num) (chunk_num(sector_num) << SECTORS_IN_CHUNK_SHIFT)
+#define chunk_end_sector(sector_num) (chunk_sta_sector(sector_num) + SECTORS_IN_CHUNK - 1)
+#define sector_whole_to_i(sector_sta, cnt_dev) (((sector_sta) & 0x7) + ((chunk_num(sector_sta) / (cnt_dev)) << SECTORS_IN_CHUNK_SHIFT))
+#define i_chunk_sta_sector(sector_num, cnt_dev) sector_whole_to_i(chunk_sta_sector(sector_num), cnt_dev)
+#define i_chunk_end_sector(sector_num, cnt_dev) sector_whole_to_i(chunk_end_sector(sector_num), cnt_dev)
 // 为方便计算扇区归属的条带，本设备中采用两侧都闭的区间
 
 #define DISK_INFO(string, args...) printk(KERN_INFO "%s: " string, VPCIEDISK_NAME, ##args)
@@ -50,7 +50,7 @@ struct graidblk_dev {
     struct gendisk *gd;
 };
 
-bool pcievdrv_submit_verify(struct bio *bio, unsigned int devi, struct graid_dev *dev);
+struct bio*  pcievdrv_submit_verify(struct bio *bio, unsigned int devi, struct graid_dev *dev);
 
 int vpciedisk_init(struct graid_dev *graid_dev);
 void vpciedisk_exit(struct graid_dev *graid_dev);

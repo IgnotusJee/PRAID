@@ -34,8 +34,8 @@ static bool __load_configs(struct pciev_config *config) {
 	config->memmap_start = memmap_start;
 	config->memmap_size = memmap_size;
 
-	config->storage_start = memmap_start + BAR_STRIPE_OFFSET;
-	config->storage_size = memmap_size - BAR_STRIPE_OFFSET;
+	config->storage_start = memmap_start + BAR_CHUNK_OFFSET;
+	config->storage_size = memmap_size - BAR_CHUNK_OFFSET;
 
 	config->cpu_nr_dispatcher = cpu;
 

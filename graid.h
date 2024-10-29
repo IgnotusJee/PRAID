@@ -12,11 +12,11 @@
 #define HARDSECT_SIZE 512
 #define KERNEL_SECTOR_SHIFT 9
 
-#define STRIPE_SHIFT 12
-#define STRIPE_SIZE (1 << STRIPE_SHIFT)
+#define CHUNK_SHIFT 12
+#define CHUNK_SIZE (1 << CHUNK_SHIFT)
 
-#define SECTORS_IN_STRIPE 8
-#define SECTORS_IN_STRIPE_SHIFT 3
+#define SECTORS_IN_CHUNK 8
+#define SECTORS_IN_CHUNK_SHIFT 3
 
 #define KB(k) ((k) << 10)
 #define MB(m) ((m) << 20)
@@ -26,7 +26,7 @@
 #define BYTE_TO_MB(b) ((b) >> 20)
 #define BYTE_TO_GB(b) ((b) >> 30)
 
-#define BAR_STRIPE_OFFSET MB(1)
+#define BAR_CHUNK_OFFSET MB(1)
 
 struct graid_config {
     unsigned int nr_nvme_disks;
@@ -57,7 +57,7 @@ struct graid_dev {
     resource_size_t mem_sta;
     size_t range;
     struct pciev_bar __iomem *bar; // struct pciev_bar 存放的地址
-    void __iomem *stripe_addr; // 三个stripe计算区域的的起始地址
+    void __iomem *chunk_addr; // 三个chunk计算区域的的起始地址
     int irq;
 };
 

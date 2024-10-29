@@ -152,7 +152,7 @@ static bool __load_configs(struct graid_config *config) {
 		}
 	}
 
-	if((unsigned long)(config->nr_nvme_disks + 1) * STRIPE_SIZE + PAGE_SIZE > memmap_size) {
+	if((unsigned long)(config->nr_nvme_disks + 1) * CHUNK_SIZE + PAGE_SIZE > memmap_size) {
 		GRAID_ERROR("Spcace proviced too small.\n");
 		return false;
 	}
