@@ -171,8 +171,9 @@ void pciev_dispatcher_clac_xor_single(void) {
 	data = pciev_vdev->storage_mapped;
 	res = data + PAGE_SIZE * 2;
 
-	if(!pciev_submit_bio(res, toffset, tsize, pciev_vdev->bar->io_property.sector_sta, pciev_vdev->verify_blk, PCIEV_BIO_READ)) {
-		PCIEV_ERROR("Failed to write verify.\n");
+	if(pciev_submit_bio(res, toffset, tsize, pciev_vdev->bar->io_property.sector_sta, pciev_vdev->verify_blk, PCIEV_BIO_READ) < 0) {
+		PCIEV_ERROR("Failed to read verify.\n");
+		return;
 	}
 
 	for(offset = 0; offset < tsize; offset += sizeof(uint64_t)) {
@@ -184,8 +185,9 @@ void pciev_dispatcher_clac_xor_single(void) {
 		U64_DATA(res, nowofs) = value;
 	}
 
-	if(!pciev_submit_bio(res, toffset, tsize, pciev_vdev->bar->io_property.sector_sta, pciev_vdev->verify_blk, PCIEV_BIO_WRITE)) {
+	if(pciev_submit_bio(res, toffset, tsize, pciev_vdev->bar->io_property.sector_sta, pciev_vdev->verify_blk, PCIEV_BIO_WRITE) < 0) {
 		PCIEV_ERROR("Failed to write verify.\n");
+		return;
 	}
 	
 	pciev_signal_irq(0);

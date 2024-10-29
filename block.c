@@ -50,7 +50,7 @@ bio_submit:
         tar_bio = pcievdrv_submit_verify(tar_bio, devi, dev);
     }
 
-    GRAID_INFO("sta_sector=%llu, end_sector=%llu, devi=%u", sta_sector, end_sector, devi);
+    GRAID_INFO("sta_sector=%llu, end_sector=%llu, devi=%u, %c\n", sta_sector, end_sector, devi, bio_data_dir(bio) == WRITE ? 'w' : 'r');
     submit_bio(tar_bio);
 
     if(flag) {

@@ -1,0 +1,9 @@
+.vscode
+*.ko
+*.o
+*.mod
+*.cmd
+*.order
+*.mod.c
+*.symvers
+TO-DO.txt

@@ -34,7 +34,7 @@ static void do_verify_work(struct work_struct *work) {
 
     VP_DEBUG("size=%llu, offset=%llu, num_sector=%llu\n", param->size, param->offset, param->num_sector);
 
-    if(!down_interruptible(&param->dev->sem)) {
+    if(down_interruptible(&param->dev->sem) < 0) {
         VP_ERROR("Semens wait interrupted.\n");
         return;
     }
@@ -48,6 +48,13 @@ static void do_verify_work(struct work_struct *work) {
     param->dev->bar->io_property.sector_sta = param->num_sector;
 
     param->dev->bar->io_property.io_num ++;
+
+    if(param->page_new) {
+        __free_page(param->page_new);
+    }
+    if(param->page_old) {
+        __free_page(param->page_old);
+    }
 }
 
 static bool add_verify_task(struct page *page_new, struct page *page_old, sector_t num_sector, uint64_t offset, uint64_t size, struct graid_dev *dev) {
@@ -110,7 +117,7 @@ static void pciev_read_bio_endio(struct bio* bio_old) {
         return;
     }
 
-    for(iter_old = bio_old->bi_iter, iter_new = bio_new->bi_iter;
+    for(iter_old = bio_new->bi_iter, iter_new = bio_new->bi_iter;
 	    iter_old.bi_size && iter_new.bi_size &&
 	    ((bvec_old = bio_iter_iovec(bio_old, iter_old)), 1) &&
         ((bvec_new = bio_iter_iovec(bio_new, iter_new)), 1);
@@ -118,6 +125,7 @@ static void pciev_read_bio_endio(struct bio* bio_old) {
     bio_advance_iter_single(bio_new, &iter_new, bvec_new.bv_len)) {
         BUG_ON(bvec_old.bv_len != bvec_new.bv_len);
         BUG_ON(bvec_old.bv_offset != bvec_new.bv_offset);
+        VP_DEBUG("iter\n");
         add_verify_task(bvec_new.bv_page, bvec_old.bv_page, pos_sector, bvec_new.bv_offset, bvec_new.bv_len, graid_dev);
         pos_sector += (bvec_new.bv_len >> KERNEL_SECTOR_SHIFT);
     }
@@ -125,6 +133,8 @@ static void pciev_read_bio_endio(struct bio* bio_old) {
     bio_for_each_segment(bvec_old, bio_old, iter_old)
 		__free_page(bvec_old.bv_page);
     bio_put(bio_old);
+
+    VP_DEBUG("read bio done.\n");
 
     submit_bio(bio_new);
 }
@@ -138,6 +148,7 @@ struct bio* pcievdrv_submit_verify(struct bio *bio, unsigned int devi, struct gr
     struct page* page;
 
     n_bio = bio_alloc(GFP_KERNEL, bio->bi_vcnt);
+    bio_set_dev(n_bio, bio->bi_bdev);
     n_bio->bi_iter.bi_sector = bio->bi_iter.bi_sector;
 
     VP_DEBUG("outter, devi=%u\n", devi);

@@ -20,11 +20,9 @@ static int pciev_dispatcher(void *data) {
 			   cpu_to_node(pciev_vdev->config.cpu_nr_dispatcher));
 	
 	while (!kthread_should_stop()) {
-		// msleep(10);
 		pciev_proc_bars();
 		pciev_dispatcher_clac_xor_single();
-		schedule();
-		// cond_resched();
+		cond_resched();
 	}
 
 	return 0;
