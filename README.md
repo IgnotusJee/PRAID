@@ -34,13 +34,9 @@ pciev_dispatcher 的流程：
 
 ## 测试
 
-使用`$sudo bash setup.sh`安装模块
+使用`setup.sh`安装模块
 
-采用以下几个指令进行测试
-
-```bash
-$ dd if=/dev/zero of=/dev/graiddisk bs=512
-```
+子目录中 testbio 是测试提交 bio 的模块；readtest 目录是直接使用 bio 读取 几个 ssd 设备的头部数据到 dmesg 里面的模块，使用 read.sh 脚本读取和 clearhead.sh 清除头部数据，方便调试。如果使用 dd 命令读取的话，会遇到更新不及时的问题，可能是快设备的缓存导致的。
 
 ## 问题
 
