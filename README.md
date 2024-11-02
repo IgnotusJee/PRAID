@@ -12,7 +12,10 @@
 
 ## 测试
 
-使用`setup.sh`安装模块
+在测试之前，在`/etc/default/grub`中添加一行`GRUB_CMDLINE_LINUX="memmap=1G\\\$5G"`，使物理
+内存中从5GB开始，1GB的空间不被映射。重启之后使用`sudo cat /proc/iomem`确认是否保留相应地>址。
+
+使用`setup.sh`安装模块，该脚本中写入了和上述参数对应的模块参数
 
 子目录中 testbio 是测试提交 bio 的模块；readtest 目录是直接使用 bio 读取 几个 ssd 设备的头部数据到 dmesg 里面的模块，使用 read.sh 脚本读取和 clearhead.sh 清除头部数据，方便调试。如果使用 dd 命令读取的话，会遇到更新不及时的问题，可能是快设备的缓存导致的。
 
