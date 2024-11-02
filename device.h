@@ -7,9 +7,9 @@
 #include <linux/types.h>
 #include <linux/time.h>
 
-#define PCIEV_DRV_NAME "GRAID_DEVICE"
+#define PCIEV_DRV_NAME "NRAID_DEVICE"
 
-#ifdef CONFIG_GRAID_DEBUG
+#ifdef CONFIG_NRAID_DEBUG
 #define PCIEV_DEBUG(string, args...) printk(KERN_DEBUG "%s %s: " string, __func__, PCIEV_DRV_NAME, ##args)
 #ifdef CONFIG_PCIEV_DEBUG_VERBOSE
 #define PCIEV_DEBUG_VERBOSE(string, args...) printk(KERN_INFO "%s: " string, PCIEV_DRV_NAME, ##args)

@@ -3,7 +3,7 @@
 #include "block.h"
 
 static blk_qc_t vpciedisk_submit_bio(struct bio *bio) {
-    struct graid_dev *dev = bio->bi_bdev->bd_disk->private_data;
+    struct nraid_dev *dev = bio->bi_bdev->bd_disk->private_data;
     struct bio *child_bio, *tar_bio, *ex_bio;
     unsigned int devi;
     sector_t sta_sector, end_sector, cnt_sectors;
@@ -25,7 +25,7 @@ bio_split:
 
     child_bio = bio_split(bio, cnt_sectors, GFP_NOIO, &dev->queue->bio_split);
     if(!child_bio) {
-        GRAID_ERROR("split bio failed.\n");
+        NRAID_ERROR("split bio failed.\n");
         bio_io_error(bio);
         goto vp_submit_bio_out;
     }
@@ -50,7 +50,7 @@ bio_submit:
         tar_bio = pcievdrv_submit_verify(tar_bio, devi, dev);
     }
 
-    GRAID_INFO("sta_sector=%llu, end_sector=%llu, devi=%u, %c\n", sta_sector, end_sector, devi, bio_data_dir(bio) == WRITE ? 'w' : 'r');
+    NRAID_INFO("sta_sector=%llu, end_sector=%llu, devi=%u, %c\n", sta_sector, end_sector, devi, bio_data_dir(bio) == WRITE ? 'w' : 'r');
     submit_bio(tar_bio);
 
     if(flag) {
@@ -62,27 +62,27 @@ vp_submit_bio_out:
 }
 
 static int vpciedisk_open(struct block_device *bdev, fmode_t mode) {
-    // struct graid_dev *dev = bdev->bd_disk->private_data;
-    GRAID_INFO("open vpciedisk device.");
+    // struct nraid_dev *dev = bdev->bd_disk->private_data;
+    NRAID_INFO("open vpciedisk device.");
     // spin_lock(&dev->blk_lock);
     return 0;
 }
 
 static void vpciedisk_release(struct gendisk *disk, fmode_t mode) {
-    // struct graid_dev *dev = disk->private_data;
-    GRAID_INFO("release vpciedisk device.");
+    // struct nraid_dev *dev = disk->private_data;
+    NRAID_INFO("release vpciedisk device.");
     // spin_unlock(&dev->blk_lock);
 }
 
 static int vpciedisk_getgeo(struct block_device *bdev, struct hd_geometry *geo) {
-    struct graid_dev *dev = bdev->bd_disk->private_data;
+    struct nraid_dev *dev = bdev->bd_disk->private_data;
 
     geo->cylinders = dev->size >> 6; // 磁道数
     geo->heads = 4; // 磁头数
     geo->sectors = 16; // 每个磁道上的扇区数
     geo->start = 4; // 块设备的起始扇区
 
-    GRAID_INFO("get vpciedisk device geometry.");
+    NRAID_INFO("get vpciedisk device geometry.");
 
     return 0;
 }
@@ -95,7 +95,7 @@ struct block_device_operations vpciedisk_dev_ops = {
     .submit_bio = vpciedisk_submit_bio,
 };
 
-static int create_block_device(struct graid_dev *dev) {
+static int create_block_device(struct nraid_dev *dev) {
     int err;
     uint64_t nr_sectors;
 
@@ -107,7 +107,7 @@ static int create_block_device(struct graid_dev *dev) {
 
     dev->gd = blk_alloc_disk(NUMA_NO_NODE);
     if(!dev->gd || IS_ERR(dev->gd->queue)) {
-        GRAID_INFO("alloc disk failure\n");
+        NRAID_INFO("alloc disk failure\n");
         goto out_err;
     }
 
@@ -122,11 +122,11 @@ static int create_block_device(struct graid_dev *dev) {
     blk_queue_logical_block_size(dev->queue, KERNEL_SECTOR_SIZE);
 
     if((err = add_disk(dev->gd)) < 0) {
-        GRAID_ERROR("add disk failure, error code %d \n", err);
+        NRAID_ERROR("add disk failure, error code %d \n", err);
         goto out_disk_init;
     }
 
-    // init_waitqueue_head(&graid_dev->verify_wait_queue);
+    // init_waitqueue_head(&nraid_dev->verify_wait_queue);
 
     return 0;
 
@@ -140,27 +140,27 @@ out_err:
     return -ENOMEM;
 }
 
-static void delete_block_device(struct graid_dev *dev) {
+static void delete_block_device(struct nraid_dev *dev) {
     if(dev->gd) {
         del_gendisk(dev->gd);
         blk_cleanup_disk(dev->gd);
     }
 
-    GRAID_INFO("deleted vpciedisk device.");
+    NRAID_INFO("deleted vpciedisk device.");
 }
 
-int vpciedisk_init(struct graid_dev *graid_dev) {
+int vpciedisk_init(struct nraid_dev *nraid_dev) {
     int status;
 
     status = register_blkdev(VPCIEDISK_MAJOR, VPCIEDISK_NAME);
     if(status < 0) {
-        GRAID_ERROR("unable to register vpciedisk device.\n");
+        NRAID_ERROR("unable to register vpciedisk device.\n");
         return -EBUSY;
     }
 
-    status = create_block_device(graid_dev);
+    status = create_block_device(nraid_dev);
     if(status < 0) {
-        GRAID_ERROR("unable to create vpciedisk device.\n");
+        NRAID_ERROR("unable to create vpciedisk device.\n");
         goto out_register;
     }
 
@@ -171,7 +171,7 @@ out_register:
     return -ENOMEM;
 }
 
-void vpciedisk_exit(struct graid_dev *graid_dev) {
-    delete_block_device(graid_dev);
+void vpciedisk_exit(struct nraid_dev *nraid_dev) {
+    delete_block_device(nraid_dev);
     unregister_blkdev(VPCIEDISK_MAJOR, VPCIEDISK_NAME);
 }

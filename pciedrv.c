@@ -2,7 +2,7 @@
 #include <linux/module.h>
 #include <linux/bio.h>
 
-#include "graid.h"
+#include "nraid.h"
 #include "pciev.h"
 #include "pciedrv.h"
 #include "block.h"
@@ -57,7 +57,7 @@ static void do_verify_work(struct work_struct *work) {
     }
 }
 
-static bool add_verify_task(struct page *page_new, struct page *page_old, sector_t num_sector, uint64_t offset, uint64_t size, struct graid_dev *dev) {
+static bool add_verify_task(struct page *page_new, struct page *page_old, sector_t num_sector, uint64_t offset, uint64_t size, struct nraid_dev *dev) {
     struct verify_work* work = kmalloc(sizeof(struct verify_work), GFP_KERNEL);
 
     if(!work) {
@@ -126,7 +126,7 @@ static void pciev_read_bio_endio(struct bio* bio_old) {
         BUG_ON(bvec_old.bv_len != bvec_new.bv_len);
         BUG_ON(bvec_old.bv_offset != bvec_new.bv_offset);
         VP_DEBUG("iter\n");
-        add_verify_task(bvec_new.bv_page, bvec_old.bv_page, pos_sector, bvec_new.bv_offset, bvec_new.bv_len, graid_dev);
+        add_verify_task(bvec_new.bv_page, bvec_old.bv_page, pos_sector, bvec_new.bv_offset, bvec_new.bv_len, nraid_dev);
         pos_sector += (bvec_new.bv_len >> KERNEL_SECTOR_SHIFT);
     }
 
@@ -139,7 +139,7 @@ static void pciev_read_bio_endio(struct bio* bio_old) {
     submit_bio(bio_new);
 }
 
-struct bio* pcievdrv_submit_verify(struct bio *bio, unsigned int devi, struct graid_dev *dev) {
+struct bio* pcievdrv_submit_verify(struct bio *bio, unsigned int devi, struct nraid_dev *dev) {
     struct bio_vec bvec;
 	struct bvec_iter iter;
     bool ret;
@@ -186,9 +186,9 @@ out_err:
 }
 
 static irqreturn_t pcievdrv_interrupt(int irq, void *dev_id) {
-    struct graid_dev *graid_dev = (struct graid_dev *)dev_id;
+    struct nraid_dev *nraid_dev = (struct nraid_dev *)dev_id;
     VP_DEBUG("");
-    up(&graid_dev->sem);
+    up(&nraid_dev->sem);
 
     return IRQ_HANDLED;
 }
@@ -206,16 +206,16 @@ static int pcievdrv_probe(struct pci_dev *dev, const struct pci_device_id *id) {
         goto out_final;
     }
 
-    graid_dev->irq = dev->irq;
-    if(graid_dev->irq < 0) {
-        VP_ERROR("invalid irq %d\n", graid_dev->irq);
+    nraid_dev->irq = dev->irq;
+    if(nraid_dev->irq < 0) {
+        VP_ERROR("invalid irq %d\n", nraid_dev->irq);
         ret = -EINVAL;
         goto out_final;
     }
 
-    graid_dev->mem_sta = pci_resource_start(dev, 0);
-    graid_dev->range = pci_resource_end(dev, 0) - graid_dev->mem_sta + 1;
-    VP_INFO("start %llx %lx\n", graid_dev->mem_sta, graid_dev->range);
+    nraid_dev->mem_sta = pci_resource_start(dev, 0);
+    nraid_dev->range = pci_resource_end(dev, 0) - nraid_dev->mem_sta + 1;
+    VP_INFO("start %llx %lx\n", nraid_dev->mem_sta, nraid_dev->range);
 
     ret = pci_request_regions(dev, PCIEVIRT_DRV_NAME);
     if(ret) {
@@ -225,54 +225,54 @@ static int pcievdrv_probe(struct pci_dev *dev, const struct pci_device_id *id) {
     }
 
     /* 将mem资源映射到虚拟地址 */
-    graid_dev->bar = memremap(graid_dev->mem_sta, PAGE_SIZE, MEMREMAP_WT);
+    nraid_dev->bar = memremap(nraid_dev->mem_sta, PAGE_SIZE, MEMREMAP_WT);
 
-    if(!graid_dev->bar) {
+    if(!nraid_dev->bar) {
         VP_ERROR("bar memremap err.\n");
         ret = -ENOMEM;
         goto out_regions;
     }
 
-    VP_INFO("bar memremap in: 0x%p\n", graid_dev->bar);
+    VP_INFO("bar memremap in: 0x%p\n", nraid_dev->bar);
 
-    chunk_sta = graid_dev->mem_sta + BAR_CHUNK_OFFSET;
+    chunk_sta = nraid_dev->mem_sta + BAR_CHUNK_OFFSET;
     chunk_range = 3 * CHUNK_SIZE;
 
-    sema_init(&graid_dev->sem, 1);
-    graid_dev->workqueue = create_workqueue("verfy_task_work_queue");
+    sema_init(&nraid_dev->sem, 1);
+    nraid_dev->workqueue = create_workqueue("verfy_task_work_queue");
 
-    // if(graid_dev->range < chunk_range + BAR_CHUNK_OFFSET) {
+    // if(nraid_dev->range < chunk_range + BAR_CHUNK_OFFSET) {
     //     VP_ERROR("request size larger than provided.\n");
     //     ret = -ENOMEM;
     //     goto out_regions;
     // }
 
-    graid_dev->chunk_addr = memremap(chunk_sta, chunk_range, MEMREMAP_WB);
+    nraid_dev->chunk_addr = memremap(chunk_sta, chunk_range, MEMREMAP_WB);
 
-    if(!graid_dev->chunk_addr) {
+    if(!nraid_dev->chunk_addr) {
         VP_ERROR("storage memremap err.\n");
         ret = -ENOMEM;
         goto out_memunmap_bar;
     }
 
     /* 申请中断IRQ并设定中断服务子函数 */
-    ret = request_irq(graid_dev->irq, pcievdrv_interrupt, IRQF_SHARED, PCIEVIRT_DRV_NAME, graid_dev);
+    ret = request_irq(nraid_dev->irq, pcievdrv_interrupt, IRQF_SHARED, PCIEVIRT_DRV_NAME, nraid_dev);
     if(ret) {
-        VP_ERROR(KERN_ERR "Can't get assigned IRQ %d.\n", graid_dev->irq);
+        VP_ERROR(KERN_ERR "Can't get assigned IRQ %d.\n", nraid_dev->irq);
         goto out_memunmap_sto;
     }
 
-    pci_set_drvdata(dev, graid_dev);
-    VP_INFO("Probe succeeds.PCIE memory addr start at %llX, mypci->bar is 0x%p,interrupt No. %d.\n", graid_dev->mem_sta, graid_dev->bar, graid_dev->irq);
+    pci_set_drvdata(dev, nraid_dev);
+    VP_INFO("Probe succeeds.PCIE memory addr start at %llX, mypci->bar is 0x%p,interrupt No. %d.\n", nraid_dev->mem_sta, nraid_dev->bar, nraid_dev->irq);
     pcievdrv_get_configs(dev);
 
     return 0;
 
 out_memunmap_sto:
-    memunmap(graid_dev->chunk_addr);
+    memunmap(nraid_dev->chunk_addr);
 out_memunmap_bar:
-    memunmap(graid_dev->bar);
-    destroy_workqueue(graid_dev->workqueue);
+    memunmap(nraid_dev->bar);
+    destroy_workqueue(nraid_dev->workqueue);
 out_regions:
     pci_release_regions(dev);
 out_final:
@@ -280,12 +280,12 @@ out_final:
 }
 
 static void pcievdrv_remove(struct pci_dev *dev) {
-    struct graid_dev *graid_dev = pci_get_drvdata(dev);
-    free_irq(graid_dev->irq, graid_dev);
-    memunmap(graid_dev->chunk_addr);
-    memunmap(graid_dev->bar);
-    flush_workqueue(graid_dev->workqueue);
-    destroy_workqueue(graid_dev->workqueue);
+    struct nraid_dev *nraid_dev = pci_get_drvdata(dev);
+    free_irq(nraid_dev->irq, nraid_dev);
+    memunmap(nraid_dev->chunk_addr);
+    memunmap(nraid_dev->bar);
+    flush_workqueue(nraid_dev->workqueue);
+    destroy_workqueue(nraid_dev->workqueue);
     pci_release_regions(dev);
     pci_disable_device(dev);
     VP_INFO("driver removed.\n");

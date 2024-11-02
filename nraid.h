@@ -1,12 +1,12 @@
-#ifndef __GRAID_H__
-#define __GRAID_H__
+#ifndef __NRAID_H__
+#define __NRAID_H__
 
 #include <linux/blkdev.h>
 #include <linux/semaphore.h>
 
-#define GRAID_NAME "graid"
-#define GRAID_ERROR(string, args...) printk(KERN_ERR "%s: " string, GRAID_NAME, ##args)
-#define GRAID_INFO(string, args...) printk(KERN_INFO "%s: " string, GRAID_NAME, ##args)
+#define NRAID_NAME "nraid"
+#define NRAID_ERROR(string, args...) printk(KERN_ERR "%s: " string, NRAID_NAME, ##args)
+#define NRAID_INFO(string, args...) printk(KERN_INFO "%s: " string, NRAID_NAME, ##args)
 
 #define KERNEL_SECTOR_SIZE 512
 #define HARDSECT_SIZE 512
@@ -28,7 +28,7 @@
 
 #define BAR_CHUNK_OFFSET MB(1)
 
-struct graid_config {
+struct nraid_config {
     unsigned int nr_nvme_disks;
     uint64_t size_nvme_disk;
     unsigned int nvme_major;
@@ -36,8 +36,8 @@ struct graid_config {
     unsigned int nvme_minor[32];
 };
 
-struct graid_dev {
-    struct graid_config config;
+struct nraid_dev {
+    struct nraid_config config;
 
     // disk property
     uint64_t size;
@@ -66,6 +66,6 @@ enum {
     STATUS_WRITE = 1,   // device is receving task
 };
 
-extern struct graid_dev* graid_dev;
+extern struct nraid_dev* nraid_dev;
 
 #endif

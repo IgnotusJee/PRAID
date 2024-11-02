@@ -10,7 +10,7 @@
 #include <linux/version.h>
 
 #include "device.h"
-#include "graid.h"
+#include "nraid.h"
 
 struct pciev_dev *pciev_vdev = NULL;
 
