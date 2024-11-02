@@ -9,7 +9,7 @@
 #include "device.h"
 #include "pci.h"
 #include "pciev.h"
-#include "graid.h"
+#include "nraid.h"
 
 struct chunk_info* si_start;
 

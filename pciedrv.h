@@ -5,7 +5,7 @@
 #include <linux/kernel.h>
 #include <linux/workqueue.h>
 
-#define PCIEVIRT_DRV_NAME "GRAID_PCIEDRV"
+#define PCIEVIRT_DRV_NAME "NRAID_PCIEDRV"
 
 #define VP_INFO(string, args...) printk(KERN_INFO "%s: " string, PCIEVIRT_DRV_NAME, ##args)
 #define VP_DEBUG(string, args...) printk(KERN_DEBUG "%s %s: " string, PCIEVIRT_DRV_NAME, __func__, ##args)
@@ -18,7 +18,7 @@ struct verify_work_param {
     uint64_t offset;
     uint64_t size;
     int done_cnt;
-    struct graid_dev *dev;
+    struct nraid_dev *dev;
 };
 
 // work_struct 和 workqueue 函数的参数

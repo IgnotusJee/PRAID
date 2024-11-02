@@ -7,9 +7,9 @@
 #include <linux/types.h>
 #include <linux/time.h>
 
-#define PCIEV_DRV_NAME "GRAID_DEVICE"
+#define PCIEV_DRV_NAME "NRAID_DEVICE"
 
-#ifdef CONFIG_GRAID_DEBUG
+#ifdef CONFIG_NRAID_DEBUG
 #define PCIEV_DEBUG(string, args...) printk(KERN_DEBUG "%s %s: " string, PCIEV_DRV_NAME, __func__, ##args)
 #ifdef CONFIG_PCIEV_DEBUG_VERBOSE
 #define PCIEV_DEBUG_VERBOSE(string, args...) printk(KERN_INFO "%s: " string, PCIEV_DRV_NAME, ##args)
@@ -70,7 +70,7 @@ struct pciev_dev {
 	struct chunk_info __iomem *si_start;
 
 	void* buffer;
-	struct graid_dev *gdev;
+	struct nraid_dev *gdev;
 };
 
 
@@ -81,7 +81,7 @@ void pciev_proc_bars(void);
 void pciev_storage_dispatch(void);
 bool PCIEV_PCI_INIT(struct pciev_dev *dev);
 
-int PCIEV_init(struct graid_dev* gdev);
+int PCIEV_init(struct nraid_dev* gdev);
 void PCIEV_exit(void);
 
 #endif /* _LIB_DEVICE_H */
