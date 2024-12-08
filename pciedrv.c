@@ -2,7 +2,7 @@
 #include <linux/module.h>
 #include <linux/bio.h>
 
-#include "nraid.h"
+#include "praid.h"
 #include "pciev.h"
 #include "pciedrv.h"
 #include "block.h"
@@ -28,7 +28,7 @@ static void pcievdrv_get_configs(struct pci_dev *dev) {
     VP_INFO("class: %x\n", val4);
 }
 
-void pcievdrv_set_wf(size_t chunk_num, struct nraid_dev *dev) {
+void pcievdrv_set_wf(size_t chunk_num, struct praid_dev *dev) {
     if(!BIT_TEST(PCIEV_BITMAP_START(dev->bar), chunk_num)) {
         BIT_SET(PCIEV_BITMAP_START(dev->bar), chunk_num);
     }
@@ -36,7 +36,7 @@ void pcievdrv_set_wf(size_t chunk_num, struct nraid_dev *dev) {
 }
 
 static irqreturn_t pcievdrv_interrupt(int irq, void *dev_id) {
-    struct nraid_dev *nraid_dev = (struct nraid_dev *)dev_id;
+    struct praid_dev *praid_dev = (struct praid_dev *)dev_id;
     VP_DEBUG("interrupt triggered.\n");
 
     return IRQ_HANDLED;
@@ -55,16 +55,16 @@ static int pcievdrv_probe(struct pci_dev *dev, const struct pci_device_id *id) {
         goto out_final;
     }
 
-    nraid_dev->irq = dev->irq;
-    if(nraid_dev->irq < 0) {
-        VP_ERROR("invalid irq %d\n", nraid_dev->irq);
+    praid_dev->irq = dev->irq;
+    if(praid_dev->irq < 0) {
+        VP_ERROR("invalid irq %d\n", praid_dev->irq);
         ret = -EINVAL;
         goto out_final;
     }
 
-    nraid_dev->mem_sta = pci_resource_start(dev, 0);
-    nraid_dev->range = pci_resource_end(dev, 0) - nraid_dev->mem_sta + 1;
-    VP_INFO("start %llx %lx\n", nraid_dev->mem_sta, nraid_dev->range);
+    praid_dev->mem_sta = pci_resource_start(dev, 0);
+    praid_dev->range = pci_resource_end(dev, 0) - praid_dev->mem_sta + 1;
+    VP_INFO("start %llx %lx\n", praid_dev->mem_sta, praid_dev->range);
 
     ret = pci_request_regions(dev, PCIEVIRT_DRV_NAME);
     if(ret) {
@@ -74,31 +74,31 @@ static int pcievdrv_probe(struct pci_dev *dev, const struct pci_device_id *id) {
     }
 
     /* 将mem资源映射到虚拟地址 */
-    nraid_dev->bar = memremap(nraid_dev->mem_sta, BAR_SIZE, MEMREMAP_WT);
+    praid_dev->bar = memremap(praid_dev->mem_sta, BAR_SIZE, MEMREMAP_WT);
 
-    if(!nraid_dev->bar) {
+    if(!praid_dev->bar) {
         VP_ERROR("bar memremap err.\n");
         ret = -ENOMEM;
         goto out_regions;
     }
 
-    VP_INFO("bar memremap in: 0x%p\n", nraid_dev->bar);
+    VP_INFO("bar memremap in: 0x%p\n", praid_dev->bar);
 
     /* 申请中断IRQ并设定中断服务子函数 */
-    ret = request_irq(nraid_dev->irq, pcievdrv_interrupt, IRQF_SHARED, PCIEVIRT_DRV_NAME, nraid_dev);
+    ret = request_irq(praid_dev->irq, pcievdrv_interrupt, IRQF_SHARED, PCIEVIRT_DRV_NAME, praid_dev);
     if(ret) {
-        VP_ERROR(KERN_ERR "Can't get assigned IRQ %d.\n", nraid_dev->irq);
+        VP_ERROR(KERN_ERR "Can't get assigned IRQ %d.\n", praid_dev->irq);
         goto out_memunmap_bar;
     }
 
-    pci_set_drvdata(dev, nraid_dev);
-    VP_INFO("Probe succeeds.PCIE memory addr start at %llX, mypci->bar is 0x%p,interrupt No. %d.\n", nraid_dev->mem_sta, nraid_dev->bar, nraid_dev->irq);
+    pci_set_drvdata(dev, praid_dev);
+    VP_INFO("Probe succeeds.PCIE memory addr start at %llX, mypci->bar is 0x%p,interrupt No. %d.\n", praid_dev->mem_sta, praid_dev->bar, praid_dev->irq);
     pcievdrv_get_configs(dev);
 
     return 0;
 
 out_memunmap_bar:
-    memunmap(nraid_dev->bar);
+    memunmap(praid_dev->bar);
 out_regions:
     pci_release_regions(dev);
 out_final:
@@ -106,9 +106,9 @@ out_final:
 }
 
 static void pcievdrv_remove(struct pci_dev *dev) {
-    struct nraid_dev *nraid_dev = pci_get_drvdata(dev);
-    free_irq(nraid_dev->irq, nraid_dev);
-    memunmap(nraid_dev->bar);
+    struct praid_dev *praid_dev = pci_get_drvdata(dev);
+    free_irq(praid_dev->irq, praid_dev);
+    memunmap(praid_dev->bar);
     pci_release_regions(dev);
     pci_disable_device(dev);
     VP_INFO("driver removed.\n");

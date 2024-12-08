@@ -10,7 +10,7 @@
 #include <linux/version.h>
 
 #include "device.h"
-#include "nraid.h"
+#include "praid.h"
 
 struct pciev_dev *pciev_vdev = NULL;
 
@@ -68,7 +68,7 @@ static void PCIEV_STORAGE_FINAL(struct pciev_dev *pciev_vdev) {
 		kfree(pciev_vdev->buffer);
 }
 
-int PCIEV_init(struct nraid_dev* gdev) {
+int PCIEV_init(struct praid_dev* gdev) {
 	pciev_vdev = VDEV_INIT();
 	if (!pciev_vdev)
 		return -EINVAL;
