@@ -2,6 +2,12 @@
 
 实现一个 raid4 阵列，校验计算设备为模拟的 pcie 设备。
 
+## 项目架构
+
+![](image.png)
+
+项目本身目的是做一个使用外围的 FPGA 或者 GPU 设备进行校验计算的 RAID 阵列，内核创建块设备劫持文件系统发来的 bio 交由驱动程序处理，数据由主机或者外围设备发送给 SSD。本仓库是该项目的纯软件模拟，目的是设计和验证交互协议。虚拟的 pcie 设备由 NVMeVirt[1] 项目的部分代码修改实现。
+
 ## 组成
 
 * device：pcie 虚拟设备，模拟的 bar 区域的 layout 为偏移0处是`struct pciev_bar`，偏移 1MB 处三个相邻的 stripe (4kb)，分别代表计算奇偶校验的时候对应的旧数据，新数据，原来的校验数据。运行一个线程`pciev_dispatcher`来执行校验的计算。
@@ -47,3 +53,7 @@ pciev_dispatcher 的流程：
 ## 改进方向
 
 将 page 和 bio 的分配都放进 pool 里面进行
+
+## reference
+
+[1] [NVMeVirt](https://github.com/snu-csl/nvmevirt)
