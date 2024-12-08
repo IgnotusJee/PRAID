@@ -6,4 +6,4 @@ default:
 
 clean:
 	   $(MAKE) -C $(KERNELDIR) M=$(PWD) clean
-	   rm -f cscope.out tags nraid.S
+	   rm -f cscope.out tags praid.S

@@ -6,11 +6,11 @@
 #include <linux/hdreg.h>
 #include <linux/blk-mq.h>
 
-#include "nraid.h"
+#include "praid.h"
 
 #define VPCIEDISK_MAJOR 400
 #define VPCIEDISK_MINORS 1
-#define VPCIEDISK_NAME "nraiddisk"
+#define VPCIEDISK_NAME "praiddisk"
 
 #define SECTOR_TO_BYTE(sector) ((sector) << KERNEL_SECTOR_SHIFT)
 
@@ -37,7 +37,7 @@ struct blkdev_config {
 };
 
 // tackle signle bio instead of using blk-mq technique, which needs tag_set
-struct nraidblk_dev {
+struct praidblk_dev {
     struct blkdev_config config;
 
     uint64_t size;
@@ -50,9 +50,9 @@ struct nraidblk_dev {
     struct gendisk *gd;
 };
 
-struct bio*  pcievdrv_submit_verify(struct bio *bio, unsigned int devi, struct nraid_dev *dev);
+struct bio*  pcievdrv_submit_verify(struct bio *bio, unsigned int devi, struct praid_dev *dev);
 
-int vpciedisk_init(struct nraid_dev *nraid_dev);
-void vpciedisk_exit(struct nraid_dev *nraid_dev);
+int vpciedisk_init(struct praid_dev *praid_dev);
+void vpciedisk_exit(struct praid_dev *praid_dev);
 
 #endif

@@ -1,12 +1,12 @@
-#ifndef __NRAID_H__
-#define __NRAID_H__
+#ifndef __PRAID_H__
+#define __PRAID_H__
 
 #include <linux/blkdev.h>
 #include <linux/semaphore.h>
 
-#define NRAID_NAME "nraid"
-#define NRAID_ERROR(string, args...) printk(KERN_ERR "%s: " string, NRAID_NAME, ##args)
-#define NRAID_INFO(string, args...) printk(KERN_INFO "%s: " string, NRAID_NAME, ##args)
+#define PRAID_NAME "praid"
+#define PRAID_ERROR(string, args...) printk(KERN_ERR "%s: " string, PRAID_NAME, ##args)
+#define PRAID_INFO(string, args...) printk(KERN_INFO "%s: " string, PRAID_NAME, ##args)
 
 #define KERNEL_SECTOR_SIZE 512
 #define HARDSECT_SIZE 512
@@ -28,7 +28,7 @@
 
 #define BAR_CHUNK_OFFSET MB(1)
 
-struct nraid_config {
+struct praid_config {
     unsigned int nr_nvme_disks;
     uint64_t size_nvme_disk;
     unsigned int nvme_major;
@@ -36,8 +36,8 @@ struct nraid_config {
     unsigned int nvme_minor[32];
 };
 
-struct nraid_dev {
-    struct nraid_config config;
+struct praid_dev {
+    struct praid_config config;
 
     // disk property
     uint64_t size;
@@ -66,6 +66,6 @@ enum {
     STATUS_WRITE = 1,   // device is receving task
 };
 
-extern struct nraid_dev* nraid_dev;
+extern struct praid_dev* praid_dev;
 
 #endif

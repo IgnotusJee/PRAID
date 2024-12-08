@@ -8,7 +8,7 @@
 #include <asm/e820/api.h>
 #endif
 
-#include "nraid.h"
+#include "praid.h"
 #include "pciedrv.h"
 #include "block.h"
 #include "device.h"
@@ -24,7 +24,7 @@
  * Storage area
 */
 
-struct nraid_dev *nraid_dev = NULL;
+struct praid_dev *praid_dev = NULL;
 
 unsigned long memmap_start = 0;
 unsigned long memmap_size = 0;
@@ -68,13 +68,13 @@ static int __validate_configs_arch(void) {
 
 	if (e820__mapped_any(resv_start_bytes, resv_end_bytes, E820_TYPE_RAM) ||
 	    e820__mapped_any(resv_start_bytes, resv_end_bytes, E820_TYPE_RESERVED_KERN)) {
-		NRAID_ERROR("[mem %#010lx-%#010lx] is usable, not reseved region\n",
+		PRAID_ERROR("[mem %#010lx-%#010lx] is usable, not reseved region\n",
 			    (unsigned long)resv_start_bytes, (unsigned long)resv_end_bytes);
 		return -EPERM;
 	}
 
 	if (!e820__mapped_any(resv_start_bytes, resv_end_bytes, E820_TYPE_RESERVED)) {
-		NRAID_ERROR("[mem %#010lx-%#010lx] is not reseved region\n",
+		PRAID_ERROR("[mem %#010lx-%#010lx] is not reseved region\n",
 			    (unsigned long)resv_start_bytes, (unsigned long)resv_end_bytes);
 		return -EPERM;
 	}
@@ -88,20 +88,20 @@ static int __validate_configs_arch(void) {
 
 static int __validate_configs(void) {
 	if (!memmap_start) {
-		NRAID_ERROR("[memmap_start] should be specified\n");
+		PRAID_ERROR("[memmap_start] should be specified\n");
 		return -EINVAL;
 	}
 
 	if (!memmap_size) {
-		NRAID_ERROR("[memmap_size] should be specified\n");
+		PRAID_ERROR("[memmap_size] should be specified\n");
 		return -EINVAL;
 	} else if (memmap_size <= MB(1)) {
-		NRAID_ERROR("[memmap_size] should be bigger than 1 MiB\n");
+		PRAID_ERROR("[memmap_size] should be bigger than 1 MiB\n");
 		return -EINVAL;
 	}
 
 	if (!cpu) {
-		NRAID_ERROR("[cpu] shoud be spcified\n");
+		PRAID_ERROR("[cpu] shoud be spcified\n");
 		return -EINVAL;
 	}
 
@@ -110,19 +110,19 @@ static int __validate_configs(void) {
 	}
 
 	if (!major) {
-		NRAID_ERROR("[major] should be specified\n");
+		PRAID_ERROR("[major] should be specified\n");
 		return -EINVAL;
 	}
 
 	if (per_size < MB(512)) {
-		NRAID_ERROR("Disk size too small\n");
+		PRAID_ERROR("Disk size too small\n");
 		return -EINVAL;
 	}
 
 	return 0;
 }
 
-static bool __load_configs(struct nraid_config *config) {
+static bool __load_configs(struct praid_config *config) {
     bool first = true;
 	unsigned int minor_nr;
 	char *minor;
@@ -147,20 +147,20 @@ static bool __load_configs(struct nraid_config *config) {
 		first = false;
 
 		if(config->nr_nvme_disks > 31) {
-			NRAID_ERROR("To many disks.\n");
+			PRAID_ERROR("To many disks.\n");
 			return false;
 		}
 	}
 
 	if((unsigned long)(config->nr_nvme_disks + 1) * CHUNK_SIZE + PAGE_SIZE > memmap_size) {
-		NRAID_ERROR("Spcace proviced too small.\n");
+		PRAID_ERROR("Spcace proviced too small.\n");
 		return false;
 	}
 
 	return true;
 }
 
-static int nvme_blkdev_init(struct nraid_dev *dev) {
+static int nvme_blkdev_init(struct praid_dev *dev) {
     int i;
 
     dev->disk_cnt = dev->config.nr_nvme_disks;
@@ -191,7 +191,7 @@ ret_err:
     return -EBUSY;
 }
 
-static void nvme_blkdev_final(struct nraid_dev *dev) {
+static void nvme_blkdev_final(struct praid_dev *dev) {
     int i;
 
     
@@ -201,33 +201,33 @@ static void nvme_blkdev_final(struct nraid_dev *dev) {
     }
 }
 
-static void __print_nraid_info(struct nraid_dev *dev) {
-	NRAID_INFO("size_nvme_disk = %lld\n", dev->config.size_nvme_disk);
-	NRAID_INFO("disk size = %lld\n", dev->size);
-	NRAID_INFO("disk count = %d\n", dev->disk_cnt);
+static void __print_praid_info(struct praid_dev *dev) {
+	PRAID_INFO("size_nvme_disk = %lld\n", dev->config.size_nvme_disk);
+	PRAID_INFO("disk size = %lld\n", dev->size);
+	PRAID_INFO("disk count = %d\n", dev->disk_cnt);
 }
 
 static int vpcie_module_init(void) {
     int ret = 0;
 
-	nraid_dev = kzalloc(sizeof(struct nraid_dev), GFP_KERNEL);
+	praid_dev = kzalloc(sizeof(struct praid_dev), GFP_KERNEL);
 
-	if(!nraid_dev) {
+	if(!praid_dev) {
 		ret = -EINVAL;
 		goto out_err;
 	}
 
-    if (!__load_configs(&nraid_dev->config)) {
+    if (!__load_configs(&praid_dev->config)) {
         ret = -EINVAL;
 		goto out_pcievdrv_err;
 	}
 
-	if(nvme_blkdev_init(nraid_dev) < 0) {
+	if(nvme_blkdev_init(praid_dev) < 0) {
 		ret = -EBUSY;
 		goto out_pcievdrv_err;
 	}
 
-	if(PCIEV_init(nraid_dev->bdev_verify, nraid_dev->disk_cnt) < 0) {
+	if(PCIEV_init(praid_dev->bdev_verify, praid_dev->disk_cnt) < 0) {
 		ret = -EBUSY;
 		goto out_nvme_err;
 	}
@@ -237,12 +237,12 @@ static int vpcie_module_init(void) {
         goto out_device_err;
     }
 
-    ret = vpciedisk_init(nraid_dev);
+    ret = vpciedisk_init(praid_dev);
     if(ret) {
         goto out_vdisk_err;
     }
 
-	__print_nraid_info(nraid_dev);
+	__print_praid_info(praid_dev);
 
     return 0;
 
@@ -253,11 +253,11 @@ out_device_err:
 	PCIEV_exit();
 
 out_nvme_err:
-	nvme_blkdev_final(nraid_dev);
+	nvme_blkdev_final(praid_dev);
 
 out_pcievdrv_err:
-	if(nraid_dev) {
-		kfree(nraid_dev);
+	if(praid_dev) {
+		kfree(praid_dev);
 	}
 
 out_err:
@@ -265,12 +265,12 @@ out_err:
 }
 
 static void vpcie_module_exit(void) {
-    vpciedisk_exit(nraid_dev);
+    vpciedisk_exit(praid_dev);
     pcievdrv_exit();
 	PCIEV_exit();
-	nvme_blkdev_final(nraid_dev);
-	if(nraid_dev) {
-		kfree(nraid_dev);
+	nvme_blkdev_final(praid_dev);
+	if(praid_dev) {
+		kfree(praid_dev);
 	}
 }
 

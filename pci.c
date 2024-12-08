@@ -9,7 +9,7 @@
 #include "device.h"
 #include "pci.h"
 #include "pciev.h"
-#include "nraid.h"
+#include "praid.h"
 
 static void __signal_irq(const char *type, unsigned int irq)
 {
